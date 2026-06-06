@@ -25,6 +25,7 @@ export default function DonorsPage() {
   const [outreachLogs, setOutreachLogs] = useState<any[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Form states
   const [name, setName] = useState("");
@@ -35,6 +36,12 @@ export default function DonorsPage() {
   const [age, setAge] = useState(25);
   const [gender, setGender] = useState("Male");
   const [type, setType] = useState("Regular");
+
+  // Pagination calculation
+  const itemsPerPage = 8;
+  const totalPages = Math.ceil(donors.length / itemsPerPage);
+  const currentPageSafe = Math.min(currentPage, Math.max(1, totalPages));
+  const paginatedDonors = donors.slice((currentPageSafe - 1) * itemsPerPage, currentPageSafe * itemsPerPage);
 
   useEffect(() => {
     fetchDonors();
@@ -151,7 +158,7 @@ export default function DonorsPage() {
                     </td>
                   </tr>
                 ) : (
-                  donors.map((d) => {
+                  paginatedDonors.map((d) => {
                     const isSelected = selectedDonor?.id === d.id;
                     const availPct = Math.round(d.availability_score * 100);
                     const churnPct = Math.round(d.churn_risk * 100);
@@ -205,6 +212,48 @@ export default function DonorsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {donors.length > itemsPerPage && (
+            <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/30 flex items-center justify-between text-xs font-semibold text-slate-400">
+              <div>
+                Showing <span className="text-slate-200">{(currentPageSafe - 1) * itemsPerPage + 1}</span> to{" "}
+                <span className="text-slate-200">{Math.min(currentPageSafe * itemsPerPage, donors.length)}</span> of{" "}
+                <span className="text-slate-200">{donors.length}</span> donors
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPageSafe === 1}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-slate-200 transition duration-150"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1.5 rounded-lg transition duration-150 ${
+                        page === currentPageSafe
+                          ? "bg-rose-600 text-white shadow-glass-primary"
+                          : "bg-slate-800/50 hover:bg-slate-800 text-slate-300"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPageSafe === totalPages}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-slate-200 transition duration-150"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Selected Donor Split Analyzer */}
