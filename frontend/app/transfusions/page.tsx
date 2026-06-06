@@ -30,9 +30,23 @@ export default function TransfusionsPage() {
   }, [activeWorkflow, workflowIds]);
 
   useEffect(() => {
-    if (selectedWorkflowId) {
-      fetchWorkflowStatus(selectedWorkflowId);
-    }
+    if (!selectedWorkflowId) return;
+    
+    // Initial fetch
+    fetchWorkflowStatus(selectedWorkflowId);
+    
+    // Poll every 3 seconds while the workflow is running
+    const interval = setInterval(() => {
+      const state = useStore.getState();
+      const current = state.activeWorkflow;
+      if (current && (current.status === "Completed" || current.status === "Failed")) {
+        clearInterval(interval);
+      } else {
+        fetchWorkflowStatus(selectedWorkflowId);
+      }
+    }, 3000);
+    
+    return () => clearInterval(interval);
   }, [selectedWorkflowId, fetchWorkflowStatus]);
 
   const handleSimulateResponse = async (accept: boolean) => {
