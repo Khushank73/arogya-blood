@@ -1,6 +1,6 @@
 import uuid
 import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from typing import List, Dict, Any, Optional
@@ -528,6 +528,103 @@ async def send_scheduled_reminders(db: AsyncSession = Depends(get_db)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/notifications/twilio-webhook")
+async def twilio_webhook(
+    From: str = Form(...),
+    Body: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    import json
+    import logging
+    from app.models.models import WorkflowState
+    logger = logging.getLogger("app.api.endpoints")
+    
+    # 1. Clean sender phone number
+    from app.services.notification_service import NotificationService
+    sender_phone = From.replace("whatsapp:", "").strip()
+    cleaned_sender = NotificationService._clean_phone(sender_phone)
+    
+    logger.info(f"Twilio Webhook: Received response from {From} (cleaned: {cleaned_sender}) with body: '{Body}'")
+    
+    # 2. Parse response (yes/accept vs no/decline)
+    body_clean = Body.strip().lower()
+    is_accept = any(word in body_clean for word in ["yes", "accept", "agree", "y", "confirm", "ok", "sure"])
+    is_decline = any(word in body_clean for word in ["no", "decline", "sorry", "n", "cancel", "busy"])
+    
+    if not is_accept and not is_decline:
+        logger.info(f"Twilio Webhook: Ambiguous message body received: '{Body}'")
+        twiml_ambiguous = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Message>Thank you for your response. Please reply with Accept (Yes) or Decline (No) to confirm your availability.</Message>
+</Response>"""
+        return Response(content=twiml_ambiguous, media_type="application/xml")
+        
+    response_str = "Accepted" if is_accept else "Declined"
+    
+    # 3. Find matching active donor
+    result = await db.execute(select(Donor).filter(Donor.active_status == "Active"))
+    donors = result.scalars().all()
+    
+    matched_donor = None
+    for d in donors:
+        if d.phone and NotificationService._clean_phone(d.phone) == cleaned_sender:
+            matched_donor = d
+            break
+            
+    # 4. Search for active workflow sessions
+    result_wf = await db.execute(select(WorkflowState))
+    wf_states = result_wf.scalars().all()
+    
+    matching_wf_id = None
+    matching_wf_state = None
+    
+    for wf in wf_states:
+        try:
+            wf_state = json.loads(wf.state_data)
+        except Exception:
+            continue
+            
+        if wf_state.get("status") == "Outreach Sent":
+            donor_id_to_check = matched_donor.id if matched_donor else "emergency-public-request"
+            if donor_id_to_check in wf_state.get("tried_donor_ids", []) or wf_state.get("assigned_donor_id") == donor_id_to_check:
+                matching_wf_id = wf.workflow_id
+                matching_wf_state = wf_state
+                break
+                
+    # 5. Advance workflow if session is found
+    reply_msg = ""
+    if matching_wf_id and matching_wf_state:
+        # Pre-assign donor to workflow if accepted
+        if is_accept:
+            try:
+                db_wf = await db.get(WorkflowState, matching_wf_id)
+                if db_wf:
+                    state_data = json.loads(db_wf.state_data)
+                    state_data["assigned_donor_id"] = matched_donor.id if matched_donor else "emergency-public-request"
+                    db_wf.state_data = json.dumps(state_data)
+                    await db.commit()
+            except Exception as e:
+                logger.error(f"Failed to pre-assign donor to workflow: {e}")
+                
+            from app.workflows.transfusion_workflow import TransfusionOrchestrator
+            TransfusionOrchestrator.submit_response(matching_wf_id, "Accepted")
+            
+            donor_name = matched_donor.name if matched_donor else "Donor"
+            reply_msg = f"Thank you {donor_name}! Your blood donation confirmation has been processed. We've scheduled your donation."
+        else:
+            from app.workflows.transfusion_workflow import TransfusionOrchestrator
+            TransfusionOrchestrator.submit_response(matching_wf_id, "Declined")
+            reply_msg = "Thank you for letting us know. We have updated our records."
+    else:
+        logger.info(f"Twilio Webhook: No active transfusion workflow session found for donor matching phone {cleaned_sender}")
+        reply_msg = "Thank you for contacting Blood Warriors. We could not locate an active transfusion request for this number."
+        
+    twiml_response = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Message>{reply_msg}</Message>
+</Response>"""
+    return Response(content=twiml_response, media_type="application/xml")
 
 # --- CHATBOT & MEMORY ENGINE ---
 
