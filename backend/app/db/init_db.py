@@ -51,9 +51,9 @@ def init_db(db: Session, csv_path: str):
         for row in reader:
             all_rows.append(row)
 
-    # 1. Store Patients (up to 30)
+    # 1. Store Patients (up to 5 for minimal showcase)
     patients_in_csv = [r for r in all_rows if clean_val(r.get("role")) == "Patient"]
-    target_patients = patients_in_csv[:30]
+    target_patients = patients_in_csv[:5]
     
     target_bridge_ids = set()
     for row in target_patients:
@@ -65,8 +65,8 @@ def init_db(db: Session, csv_path: str):
     bridge_donors = [r for r in all_rows if clean_val(r.get("role")) == "Bridge Donor" and clean_val(r.get("bridge_id")) in target_bridge_ids]
     other_donors = [r for r in all_rows if clean_val(r.get("role")) in ["Emergency Donor", "Volunteer"] and clean_val(r.get("user_donation_active_status")) == "Active"]
     
-    # We want at least 120-150 total donors. Let's take all matching bridge donors + up to 80 other active donors
-    selected_other_donors = other_donors[:80]
+    # Take matching bridge donors + up to 10 other active donors
+    selected_other_donors = other_donors[:10]
     donors_to_import = bridge_donors + selected_other_donors
 
     for row in donors_to_import:
@@ -182,7 +182,7 @@ def init_db(db: Session, csv_path: str):
         )
 
     # Pad donors and patients if they are below target counts to ensure exact specifications
-    while len(donors_to_add) < 110:
+    while len(donors_to_add) < 15:
         d_id = f"donor-mock-{random.randint(10000, 99999)}"
         name = f"{random.choice(first_names)} {random.choice(last_names)}"
         phone = f"+91 {random.randint(70000, 99999)} {random.randint(10000, 99999)}"
@@ -204,13 +204,13 @@ def init_db(db: Session, csv_path: str):
             last_donation_date="12-03-2026",
             next_eligible_date="12-06-2026",
             engagement_score=round(random.uniform(40.0, 90.0), 1),
-            availability_score=round(random.uniform(0.3, 0.9), 2),
+            availability_score=round(random.uniform(0.3, 0.95), 2),
             churn_risk=round(random.uniform(0.1, 0.5), 2),
             active_status="Active",
             consent_given=True
         )
 
-    while len(patients_to_add) < 26:
+    while len(patients_to_add) < 5:
         p_id = f"patient-mock-{random.randint(10000, 99999)}"
         name = f"{random.choice(first_names)} {random.choice(last_names)}"
         bg = random.choice(["O Positive", "A Positive", "B Positive", "AB Positive", "O Negative"])
@@ -258,15 +258,15 @@ def init_db(db: Session, csv_path: str):
     db.commit()
     print(f"Saved {len(bridge_matches)} Care Bridge donor-patient matches.")
 
-    # Generate 500+ Donation History logs
-    print("Generating 500+ donation records...")
+    # Generate minimal Donation History logs
+    print("Generating minimal donation records...")
     donors_list = list(donors_to_add.values())
     patients_list = list(patients_to_add.values())
     
     donations_history = []
     base_date = datetime.datetime(2025, 6, 6)
     
-    for _ in range(520):
+    for _ in range(40):
         donor = random.choice(donors_list)
         patient = random.choice(patients_list)
         
