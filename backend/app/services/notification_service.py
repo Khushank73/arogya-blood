@@ -111,11 +111,25 @@ class NotificationService:
     @classmethod
     def send_outreach(cls, to_phone: str, message: str) -> Optional[str]:
         """
-        Dispatches message dynamically via SMS or WhatsApp depending on environment variables.
+        Dispatches message dynamically via SMS, WhatsApp, or both depending on environment variables.
         """
         channel = os.getenv("NOTIFICATION_CHANNEL", "SMS").upper()
-        if channel == "WHATSAPP":
-            return cls.send_whatsapp_twilio(to_phone, message)
-        else:
-            return cls.send_sms_aws_sns(to_phone, message)
+        
+        result_sid = None
+        
+        # If channel is WHATSAPP, BOTH, or contains WHATSAPP
+        if "WHATSAPP" in channel or channel == "BOTH":
+            try:
+                result_sid = cls.send_whatsapp_twilio(to_phone, message)
+            except Exception as e:
+                logger.error(f"Failed to send WhatsApp in send_outreach: {e}")
+                
+        # If channel is SMS, BOTH, or contains SMS
+        if "SMS" in channel or channel == "BOTH":
+            try:
+                result_sid = cls.send_sms_aws_sns(to_phone, message)
+            except Exception as e:
+                logger.error(f"Failed to send AWS SNS SMS in send_outreach: {e}")
+                
+        return result_sid
 
