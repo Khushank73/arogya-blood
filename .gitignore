@@ -1,0 +1,40 @@
+# Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Node / Next.js files
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+
+# Local databases and runtime state
+*.db
+backend/blood_warriors.db
+app_data/
+backend/app_data/
+backend/app/app_data/
+.system_generated/
+.gemini/
+
+# Environment configurations (Secrets)
+.env
+.env.local
+*.env
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
