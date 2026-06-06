@@ -51,9 +51,9 @@ class ReminderService:
                 f"for Thalassemia support. Thank you for your support!"
             )
             
-            # Send AWS SNS SMS message
+            # Send outreach message (SMS or WhatsApp)
             try:
-                message_sid = NotificationService.send_sms_aws_sns(phone, custom_message)
+                message_sid = NotificationService.send_outreach(phone, custom_message)
                 
                 # Create and persist outreach log
                 outreach_log = OutreachLog(

@@ -184,10 +184,10 @@ def generate_outreach_node(state: TransfusionState) -> TransfusionState:
         phone = db_donor.phone if db_donor else "+91 99999 99999"
         
         try:
-            NotificationService.send_sms_aws_sns(phone, msg)
-            logger.info(f"AWS SNS outreach notification sent successfully to {donor['name']}")
+            NotificationService.send_outreach(phone, msg)
+            logger.info(f"Outreach notification sent successfully to {donor['name']}")
         except Exception as ne:
-            logger.error(f"Failed to send AWS SNS outreach to {donor['name']}: {str(ne)}")
+            logger.error(f"Failed to send outreach to {donor['name']}: {str(ne)}")
             
         log = OutreachLog(
             donor_id=donor["donor_id"],

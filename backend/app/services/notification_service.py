@@ -107,3 +107,15 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Failed to send AWS SNS SMS to {to_phone}: {str(e)}")
             raise e
+
+    @classmethod
+    def send_outreach(cls, to_phone: str, message: str) -> Optional[str]:
+        """
+        Dispatches message dynamically via SMS or WhatsApp depending on environment variables.
+        """
+        channel = os.getenv("NOTIFICATION_CHANNEL", "SMS").upper()
+        if channel == "WHATSAPP":
+            return cls.send_whatsapp_twilio(to_phone, message)
+        else:
+            return cls.send_sms_aws_sns(to_phone, message)
+
