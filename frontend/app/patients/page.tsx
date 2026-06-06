@@ -299,8 +299,8 @@ export default function PatientsPage() {
 
       {/* Modal Dialog for Registering Patient */}
       {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-          <div className="glass-panel w-full max-w-lg rounded-2xl p-6 space-y-5 shadow-glass animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 backdrop-blur-sm overflow-y-auto p-4 md:p-10">
+          <div className="glass-panel w-full max-w-lg rounded-2xl p-6 space-y-5 shadow-glass animate-fade-in my-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="text-lg font-bold font-heading text-slate-100 flex items-center gap-2">
                 <Users className="w-5 h-5 text-rose-500" />
