@@ -1,4 +1,15 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      return `http://${hostname}:8000/api/v1`;
+    }
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+};
+
+const BASE_URL = getBaseUrl();
+
 
 async function request(endpoint: string, options: RequestInit = {}) {
   const url = `${BASE_URL}${endpoint}`;
