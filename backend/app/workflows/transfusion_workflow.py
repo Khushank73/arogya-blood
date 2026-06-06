@@ -156,7 +156,7 @@ def generate_outreach_node(state: TransfusionState) -> TransfusionState:
     if state["assigned_donor_id"] and state["response_received"] is not None:
         return state
         
-    # Pick next untried donor from ranked list
+    # Get all untried donors from the ranked list
     available_donors = [d for d in state["ranked_donors"] if d["donor_id"] not in state["tried_donor_ids"]]
     if not available_donors:
         state["status"] = "Failed"
@@ -169,40 +169,46 @@ def generate_outreach_node(state: TransfusionState) -> TransfusionState:
         })
         return state
 
-    donor = available_donors[0]
-    state["assigned_donor_id"] = donor["donor_id"]
-    state["tried_donor_ids"].append(donor["donor_id"])
+    # Send outreach to the top 10 recommended candidates simultaneously
+    donors_to_contact = available_donors[:10]
     
-    msg = f"Dear {donor['name']}, we have an urgent blood requirement for a Thalassemia patient ({donor['blood_group']}). Your match score is {int(donor['match_score']*100)}%. Can you donate?"
-    state["outreach_message"] = msg
-    state["status"] = "Outreach Sent"
-    
-    # Fetch phone number and send AWS SNS SMS notification
     db = SessionLocal()
     try:
-        db_donor = db.query(Donor).filter(Donor.id == donor["donor_id"]).first()
-        phone = db_donor.phone if db_donor else "+91 99999 99999"
-        
-        try:
-            NotificationService.send_outreach(phone, msg)
-            logger.info(f"Outreach notification sent successfully to {donor['name']}")
-        except Exception as ne:
-            logger.error(f"Failed to send outreach to {donor['name']}: {str(ne)}")
+        for donor in donors_to_contact:
+            state["tried_donor_ids"].append(donor["donor_id"])
             
-        log = OutreachLog(
-            donor_id=donor["donor_id"],
-            message=msg,
-            response_status="Sent"
-        )
-        db.add(log)
+            msg = f"Dear {donor['name']}, we have an urgent blood requirement for a Thalassemia patient ({donor['blood_group']}). Your match score is {int(donor['match_score']*100)}%. Can you donate?"
+            
+            db_donor = db.query(Donor).filter(Donor.id == donor["donor_id"]).first()
+            phone = db_donor.phone if db_donor else "+91 99999 99999"
+            
+            try:
+                NotificationService.send_outreach(phone, msg)
+                logger.info(f"Outreach notification sent successfully to {donor['name']}")
+            except Exception as ne:
+                logger.error(f"Failed to send outreach to {donor['name']}: {str(ne)}")
+                
+            log = OutreachLog(
+                donor_id=donor["donor_id"],
+                message=msg,
+                response_status="Sent"
+            )
+            db.add(log)
         db.commit()
     finally:
         db.close()
 
+    # Assign to top match in this batch as primary placeholder
+    top_donor = donors_to_contact[0]
+    state["assigned_donor_id"] = top_donor["donor_id"]
+    state["outreach_message"] = f"Sent broadcast outreach to {len(donors_to_contact)} matching donors."
+    state["status"] = "Outreach Sent"
+    
+    names_list = ", ".join([d["name"] for d in donors_to_contact])
     state["timeline"].append({
         "step": "Outreach Sent",
         "status": "In Progress",
-        "message": f"Outreach dispatch sent to {donor['name']} via AWS SNS SMS. Awaiting confirmation.",
+        "message": f"Broadcast outreach sent to top {len(donors_to_contact)} matching donors: {names_list}. Awaiting confirmation.",
         "timestamp": datetime.datetime.utcnow().isoformat()
     })
     return state
