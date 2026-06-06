@@ -46,7 +46,12 @@ services:
       - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:password@db:5432/blood_warriors
       - REDIS_URL=redis://redis:6379/0
       - AWS_DEFAULT_REGION=us-east-1
-      - USE_LOCAL_MOCKS=TRUE
+      - USE_LOCAL_MOCKS=FALSE
+      - NOTIFICATION_CHANNEL=WHATSAPP
+      - TWILIO_ACCOUNT_SID=your_twilio_sid
+      - TWILIO_AUTH_TOKEN=your_twilio_token
+      - TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+
     depends_on:
       db:
         condition: service_healthy
