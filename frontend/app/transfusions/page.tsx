@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function TransfusionsPage() {
-  const { activeWorkflow, fetchWorkflowStatus, submitOutreachResponse, isLoading } = useStore();
+  const { activeWorkflow, fetchWorkflowStatus, submitOutreachResponse, completeDonation, isLoading } = useStore();
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>("tx-mock-12345");
   const [workflowIds, setWorkflowIds] = useState<string[]>(["tx-mock-12345"]);
 
@@ -52,6 +52,11 @@ export default function TransfusionsPage() {
   const handleSimulateResponse = async (accept: boolean) => {
     if (!selectedWorkflowId) return;
     await submitOutreachResponse(selectedWorkflowId, accept);
+  };
+
+  const handleRecordSuccessfulDonation = async () => {
+    if (!selectedWorkflowId) return;
+    await completeDonation(selectedWorkflowId);
   };
 
   // Steps in workflow timeline for visual gauge
@@ -210,6 +215,27 @@ export default function TransfusionsPage() {
                     Simulate Decline
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Donation Completion Control Panel */}
+            {activeWorkflow.status === "Completed" && !activeWorkflow.timeline.some((item: any) => item.step === "Donation Completed") && (
+              <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl space-y-4 animate-fade-in">
+                <div className="flex items-center gap-2 text-xs text-emerald-500 font-bold uppercase tracking-wider">
+                  <Calendar className="w-4 h-4" />
+                  Admin Coordination Control
+                </div>
+                <p className="text-xs text-slate-300">
+                  The donation has been scheduled. Once the donor successfully completes the blood donation, record it below to update their 90-day eligibility, refresh AI model availability/churn metrics, and trigger a thank-you SMS.
+                </p>
+                <button
+                  onClick={handleRecordSuccessfulDonation}
+                  disabled={isLoading}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm text-xs transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Record Successful Donation
+                </button>
               </div>
             )}
           </div>

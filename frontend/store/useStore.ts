@@ -34,6 +34,7 @@ interface StateStore {
   
   requestTransfusion: (patientId: string, quantity: number) => Promise<string>;
   submitOutreachResponse: (workflowId: string, accept: boolean) => Promise<void>;
+  completeDonation: (workflowId: string) => Promise<void>;
   fetchWorkflowStatus: (workflowId: string) => Promise<void>;
   
   sendMessage: (text: string) => Promise<void>;
@@ -169,6 +170,16 @@ export const useStore = create<StateStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const updatedWf = await apiService.respondTransfusionWorkflow(workflowId, accept);
+      set({ activeWorkflow: updatedWf, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
+    } catch (err: any) {
+      set({ error: err.message, isLoading: false });
+    }
+  },
+
+  completeDonation: async (workflowId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const updatedWf = await apiService.completeDonation(workflowId);
       set({ activeWorkflow: updatedWf, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });

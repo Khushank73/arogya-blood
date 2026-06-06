@@ -128,6 +128,47 @@ class TestBloodWarriorsAI(unittest.TestCase):
             self.assertEqual(respond_data["status"], "Completed")
             self.assertEqual(respond_data["current_step"], "Schedule Donation")
             print("Workflow successfully advanced and completed upon donor confirmation.")
+            
+            # Verify donor has NOT been locked out yet (deferred update check)
+            assigned_donor_id = respond_data["assigned_donor_id"]
+            self.assertIsNotNone(assigned_donor_id)
+            
+            donor = db.query(Donor).filter(Donor.id == assigned_donor_id).first()
+            initial_donations = donor.donations_till_date
+            initial_last_donation = donor.last_donation_date
+            initial_next_eligible = donor.next_eligible_date
+            
+            # Perform completed donation API call
+            complete_res = self.client.post(f"/api/v1/transfusion/workflow/{workflow_id}/complete-donation")
+            self.assertEqual(complete_res.status_code, 200)
+            complete_data = complete_res.json()
+            
+            # Refresh donor from DB
+            db.refresh(donor)
+            
+            # Verify the eligibility block of 90 days and metric/score changes
+            self.assertEqual(donor.donations_till_date, initial_donations + 1)
+            self.assertIsNotNone(donor.last_donation_date)
+            self.assertIsNotNone(donor.next_eligible_date)
+            
+            # Verify next eligible date is exactly 90 days after last donation
+            import datetime
+            last_don = datetime.datetime.strptime(donor.last_donation_date, "%d-%m-%Y")
+            next_elig = datetime.datetime.strptime(donor.next_eligible_date, "%d-%m-%Y")
+            self.assertEqual((next_elig - last_don).days, 90)
+            
+            # Verify matching DonationHistory status is "Completed"
+            donation = db.query(DonationHistory).filter(DonationHistory.notes == f"Scheduled via Workflow {workflow_id}").first()
+            self.assertIsNotNone(donation)
+            self.assertEqual(donation.status, "Completed")
+            
+            # Verify availability score is updated to reflect new prediction
+            print(f"Donor availability score post-donation: {donor.availability_score * 100}%")
+            
+            # Verify timeline step has "Donation Completed"
+            timeline_steps = [item["step"] for item in complete_data["timeline"]]
+            self.assertIn("Donation Completed", timeline_steps)
+            print("Verified 90-day block, metric updates, timeline and completion state successfully.")
         finally:
             db.close()
 

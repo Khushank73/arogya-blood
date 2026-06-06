@@ -384,36 +384,6 @@ def schedule_donation_node(state: TransfusionState) -> TransfusionState:
         )
         db.add(donation)
         
-        # Update Donor eligibility dates and scores (Success reinforcement!)
-        if donor and donor.id != "emergency-public-request":
-            donor.last_donation_date = donation_date_str
-            # Set next eligibility 90 days from now (enforces 3 months periodic rotation)
-            next_elig = datetime.datetime.utcnow() + datetime.timedelta(days=90)
-            donor.next_eligible_date = next_elig.strftime("%d-%m-%Y")
-            donor.donations_till_date += 1
-            
-            # Increase engagement score
-            donor.engagement_score = min(100.0, float(donor.engagement_score) + 5.0)
-            
-            # Recalculate predictions
-            from app.ai.availability_model import availability_engine
-            from app.ai.churn_model import churn_engine
-            
-            donor.availability_score = availability_engine.predict(
-                days_since_last_donation=0.0,  # just donated
-                donations_till_date=donor.donations_till_date,
-                engagement_score=donor.engagement_score,
-                active_status=True
-            )
-            
-            response_rate = min(1.0, donor.donations_till_date / max(1, donor.donations_till_date + 3))
-            donor.churn_risk = churn_engine.predict(
-                engagement_score=donor.engagement_score,
-                days_since_last_donation=0.0,
-                active_status=True,
-                response_rate=response_rate
-            )
-            
         # Update Patient transfusion schedules
         if patient:
             patient.last_transfusion_date = donation_date_str

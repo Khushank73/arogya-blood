@@ -327,6 +327,26 @@ export const apiService = {
     }
   },
 
+  async completeDonation(workflowId: string): Promise<any> {
+    try {
+      return await request(`/transfusion/workflow/${workflowId}/complete-donation`, {
+        method: "POST"
+      });
+    } catch {
+      const wf = MOCK_WORKFLOWS[workflowId];
+      if (wf) {
+        wf.timeline.push({
+          step: "Donation Completed",
+          status: "Success",
+          message: "Successfully completed donation. Thank-you SMS sent to donor.",
+          timestamp: new Date().toISOString()
+        });
+        return wf;
+      }
+      throw new Error("Workflow session not found");
+    }
+  },
+
   async getDashboardData(): Promise<any> {
     try {
       return await request("/analytics/dashboard");

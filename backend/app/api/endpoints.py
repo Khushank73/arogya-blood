@@ -447,6 +447,127 @@ def respond_transfusion_workflow(id: str, accept: bool):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.post("/transfusion/workflow/{id}/complete-donation", response_model=schemas.TransfusionWorkflowResponse)
+async def complete_donation(id: str, db: AsyncSession = Depends(get_db)):
+    import json
+    import logging
+    from app.models.models import WorkflowState
+    
+    logger = logging.getLogger("app.api.endpoints")
+    
+    # 1. Load workflow state
+    state = load_workflow_state(id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+        
+    # Check if already completed
+    is_already_completed = any(item.get("step") == "Donation Completed" for item in state.get("timeline", []))
+    if is_already_completed:
+        return schemas.TransfusionWorkflowResponse(
+            workflow_id=state["workflow_id"],
+            patient_id=state["patient_id"],
+            status=state["status"],
+            current_step=state["current_step"],
+            assigned_donor_id=state["assigned_donor_id"],
+            outreach_sent=(state["assigned_donor_id"] is not None),
+            response_received=state["response_received"],
+            created_at=datetime.datetime.utcnow().isoformat(),
+            updated_at=datetime.datetime.utcnow().isoformat(),
+            timeline=state["timeline"]
+        )
+        
+    # 2. Look up the DonationHistory matching this workflow notes
+    # Notes are like: "Scheduled via Workflow {workflow_id}"
+    donation_result = await db.execute(
+        select(DonationHistory).filter(DonationHistory.notes == f"Scheduled via Workflow {id}")
+    )
+    donation = donation_result.scalars().first()
+    if donation:
+        donation.status = "Completed"
+        logger.info(f"Updated DonationHistory status to Completed for workflow {id}")
+    else:
+        logger.warning(f"No DonationHistory found with notes 'Scheduled via Workflow {id}'")
+        
+    # 3. Update Donor eligibility, count, engagement_score, and AI predictions
+    donor_id = state.get("assigned_donor_id")
+    if donor_id and donor_id != "emergency-public-request":
+        donor_result = await db.execute(
+            select(Donor).filter(Donor.id == donor_id)
+        )
+        donor = donor_result.scalars().first()
+        if donor:
+            today_str = datetime.datetime.utcnow().strftime("%d-%m-%Y")
+            donor.last_donation_date = today_str
+            
+            # Set next eligibility to exactly 90 days from now (locking them for 3 months)
+            next_elig = datetime.datetime.utcnow() + datetime.timedelta(days=90)
+            donor.next_eligible_date = next_elig.strftime("%d-%m-%Y")
+            donor.donations_till_date += 1
+            
+            # Increase engagement score
+            donor.engagement_score = min(100.0, float(donor.engagement_score) + 5.0)
+            
+            # Recalculate predictions using ML engines
+            donor.availability_score = availability_engine.predict(
+                days_since_last_donation=0.0,
+                donations_till_date=donor.donations_till_date,
+                engagement_score=donor.engagement_score,
+                active_status=True
+            )
+            
+            response_rate = min(1.0, donor.donations_till_date / max(1, donor.donations_till_date + 3))
+            donor.churn_risk = churn_engine.predict(
+                engagement_score=donor.engagement_score,
+                days_since_last_donation=0.0,
+                active_status=True,
+                response_rate=response_rate
+            )
+            
+            logger.info(f"Updated eligibility and predictions for donor {donor.name} (ID: {donor_id})")
+            
+            # Send thank-you SMS via AWS SNS
+            from app.services.notification_service import NotificationService
+            sms_msg = f"Thank you {donor.name} for your blood donation! You have successfully helped a Thalassemia patient today. Your 90-day rest period is activated."
+            try:
+                NotificationService.send_sms_aws_sns(donor.phone, sms_msg)
+                logger.info(f"Thank-you SMS sent to donor {donor.name} via AWS SNS")
+            except Exception as se:
+                logger.error(f"Failed to send thank-you SMS to donor {donor.name}: {str(se)}")
+                
+    # 4. Append timeline step
+    state["timeline"].append({
+        "step": "Donation Completed",
+        "status": "Success",
+        "message": "Successfully completed donation. Thank-you SMS sent to donor.",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+    
+    # 5. Save the state in workflow_states
+    wf_state_res = await db.execute(
+        select(WorkflowState).filter(WorkflowState.workflow_id == id)
+    )
+    wf_state = wf_state_res.scalars().first()
+    if wf_state:
+        wf_state.state_data = json.dumps(state)
+        wf_state.updated_at = datetime.datetime.utcnow()
+        logger.info(f"Saved completed state to database for workflow {id}")
+        
+    await db.commit()
+    
+    return schemas.TransfusionWorkflowResponse(
+        workflow_id=state["workflow_id"],
+        patient_id=state["patient_id"],
+        status=state["status"],
+        current_step=state["current_step"],
+        assigned_donor_id=state["assigned_donor_id"],
+        outreach_sent=(state["assigned_donor_id"] is not None),
+        response_received=state["response_received"],
+        created_at=datetime.datetime.utcnow().isoformat(),
+        updated_at=datetime.datetime.utcnow().isoformat(),
+        timeline=state["timeline"]
+    )
+
+
 # --- ANALYTICS & DASHBOARD ---
 
 @router.get("/analytics/dashboard", response_model=schemas.AnalyticsDashboardResponse)
