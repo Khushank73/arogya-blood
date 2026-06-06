@@ -17,6 +17,7 @@ interface StateStore {
   chatHistory: ChatMessage[];
   isLoading: boolean;
   error: string | null;
+  lastSyncTime: string | null;
   
   // Actions
   fetchPatients: () => Promise<void>;
@@ -54,12 +55,13 @@ export const useStore = create<StateStore>((set, get) => ({
   ],
   isLoading: false,
   error: null,
+  lastSyncTime: null,
 
   fetchPatients: async () => {
     set({ isLoading: true, error: null });
     try {
       const data = await apiService.getPatients();
-      set({ patients: data, isLoading: false });
+      set({ patients: data, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
@@ -69,7 +71,7 @@ export const useStore = create<StateStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await apiService.getDonors();
-      set({ donors: data, isLoading: false });
+      set({ donors: data, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
@@ -79,7 +81,7 @@ export const useStore = create<StateStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const data = await apiService.getDashboardData();
-      set({ dashboard: data, isLoading: false });
+      set({ dashboard: data, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
@@ -88,7 +90,7 @@ export const useStore = create<StateStore>((set, get) => ({
   addPatient: async (patient) => {
     try {
       const newPatient = await apiService.createPatient(patient);
-      set((state) => ({ patients: [newPatient, ...state.patients] }));
+      set((state) => ({ patients: [newPatient, ...state.patients], lastSyncTime: new Date().toLocaleTimeString() }));
     } catch (err: any) {
       set({ error: err.message });
     }
@@ -98,7 +100,8 @@ export const useStore = create<StateStore>((set, get) => ({
     try {
       const updated = await apiService.updatePatient(id, patient);
       set((state) => ({
-        patients: state.patients.map((p) => (p.id === id ? updated : p))
+        patients: state.patients.map((p) => (p.id === id ? updated : p)),
+        lastSyncTime: new Date().toLocaleTimeString()
       }));
     } catch (err: any) {
       set({ error: err.message });
@@ -109,7 +112,8 @@ export const useStore = create<StateStore>((set, get) => ({
     try {
       await apiService.deletePatient(id);
       set((state) => ({
-        patients: state.patients.filter((p) => p.id !== id)
+        patients: state.patients.filter((p) => p.id !== id),
+        lastSyncTime: new Date().toLocaleTimeString()
       }));
     } catch (err: any) {
       set({ error: err.message });
@@ -119,7 +123,7 @@ export const useStore = create<StateStore>((set, get) => ({
   addDonor: async (donor) => {
     try {
       const newDonor = await apiService.createDonor(donor);
-      set((state) => ({ donors: [newDonor, ...state.donors] }));
+      set((state) => ({ donors: [newDonor, ...state.donors], lastSyncTime: new Date().toLocaleTimeString() }));
     } catch (err: any) {
       set({ error: err.message });
     }
@@ -129,7 +133,8 @@ export const useStore = create<StateStore>((set, get) => ({
     try {
       const updated = await apiService.updateDonor(id, donor);
       set((state) => ({
-        donors: state.donors.map((d) => (d.id === id ? updated : d))
+        donors: state.donors.map((d) => (d.id === id ? updated : d)),
+        lastSyncTime: new Date().toLocaleTimeString()
       }));
     } catch (err: any) {
       set({ error: err.message });
@@ -140,7 +145,8 @@ export const useStore = create<StateStore>((set, get) => ({
     try {
       await apiService.deleteDonor(id);
       set((state) => ({
-        donors: state.donors.filter((d) => d.id !== id)
+        donors: state.donors.filter((d) => d.id !== id),
+        lastSyncTime: new Date().toLocaleTimeString()
       }));
     } catch (err: any) {
       set({ error: err.message });
@@ -151,7 +157,7 @@ export const useStore = create<StateStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const wf = await apiService.requestTransfusion(patientId, quantity);
-      set({ activeWorkflow: wf, isLoading: false });
+      set({ activeWorkflow: wf, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
       return wf.workflow_id;
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
@@ -163,7 +169,7 @@ export const useStore = create<StateStore>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const updatedWf = await apiService.respondTransfusionWorkflow(workflowId, accept);
-      set({ activeWorkflow: updatedWf, isLoading: false });
+      set({ activeWorkflow: updatedWf, isLoading: false, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
@@ -172,7 +178,7 @@ export const useStore = create<StateStore>((set, get) => ({
   fetchWorkflowStatus: async (workflowId) => {
     try {
       const wf = await apiService.getTransfusionWorkflow(workflowId);
-      set({ activeWorkflow: wf });
+      set({ activeWorkflow: wf, lastSyncTime: new Date().toLocaleTimeString() });
     } catch (err: any) {
       set({ error: err.message });
     }

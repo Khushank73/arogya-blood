@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiService } from "@/services/api";
+import { useStore } from "@/store/useStore";
 import { 
   Network, 
   Users, 
@@ -33,6 +34,7 @@ export default function BridgesPage() {
     try {
       const data = await apiService.getBridgesOverview();
       setBridges(data || []);
+      useStore.setState({ lastSyncTime: new Date().toLocaleTimeString() });
       if (data && data.length > 0 && !selectedPatientId) {
         setSelectedPatientId(data[0].patient_id);
       }

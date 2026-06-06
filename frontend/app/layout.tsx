@@ -1,5 +1,6 @@
 import "./globals.css";
 import Sidebar from "@/components/sidebar";
+import LastSync from "@/components/last_sync";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -30,9 +31,7 @@ export default function RootLayout({
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">
                   Node-01 Active
                 </span>
-                <span className="text-xs text-slate-500 font-medium">
-                  Last Sync: {new Date().toLocaleDateString()}
-                </span>
+                <LastSync />
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">

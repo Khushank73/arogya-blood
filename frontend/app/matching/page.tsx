@@ -111,7 +111,7 @@ export default function MatchingPage() {
             </div>
           )}
 
-          {selectedPatient && matches.length > 0 && (
+          {selectedPatient && (
             <div className="space-y-3">
               <button
                 onClick={handleTriggerWorkflow}

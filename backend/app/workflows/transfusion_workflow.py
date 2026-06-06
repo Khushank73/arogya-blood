@@ -128,12 +128,27 @@ def rank_donors_node(state: TransfusionState) -> TransfusionState:
         state["ranked_donors"] = combined_matches[:10]
         
         if not combined_matches:
-            state["status"] = "Failed"
-            state["error"] = "No compatible donors found"
+            # First, check if the placeholder donor exists in the database. If not, create it to avoid FK errors.
+            placeholder = db.query(Donor).filter(Donor.id == "emergency-public-request").first()
+            if not placeholder:
+                patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
+                placeholder = Donor(
+                    id="emergency-public-request",
+                    name="Emergency Public Donor",
+                    phone="+91 99999 99999",
+                    email="public_donor@example.com",
+                    blood_group=patient.blood_group if patient else "O Positive",
+                    active_status="Active"
+                )
+                db.add(placeholder)
+                db.commit()
+
+            state["status"] = "Outreach Sent"
+            state["assigned_donor_id"] = "emergency-public-request"
             state["timeline"].append({
                 "step": "Rank Donors",
-                "status": "Failed",
-                "message": "Smart Matching Engine yielded 0 eligible, compatible donors.",
+                "status": "Success",
+                "message": "Smart Matching Engine yielded 0 pool/emergency donors. Automatically dispatched emergency public request for donor search.",
                 "timestamp": datetime.datetime.utcnow().isoformat()
             })
         else:
@@ -156,6 +171,47 @@ def generate_outreach_node(state: TransfusionState) -> TransfusionState:
     if state["assigned_donor_id"] and state["response_received"] is not None:
         return state
         
+    if state["assigned_donor_id"] == "emergency-public-request":
+        db = SessionLocal()
+        try:
+            patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
+            patient_name = patient.name if patient else "Unknown Patient"
+            blood_group = patient.blood_group if patient else "Unknown"
+            
+            msg = f"ALERT: Thalassemia patient {patient_name} ({blood_group}) has 0 matching pool donors in Blood Warriors AI. Urgent public donor request is required."
+            state["outreach_message"] = msg
+            state["status"] = "Outreach Sent"
+            
+            admin_phone = os.getenv("ADMIN_PHONE_NUMBER") or os.getenv("COORDINATOR_PHONE_NUMBER") or "+91 99999 99999"
+            
+            try:
+                NotificationService.send_outreach(admin_phone, msg)
+                logger.info(f"Emergency public donor outreach alert sent successfully to admin/coordinator: {admin_phone}")
+            except Exception as ne:
+                logger.error(f"Failed to send emergency public outreach alert: {str(ne)}")
+
+            log = db.query(OutreachLog).filter(OutreachLog.donor_id == "emergency-public-request").first()
+            if not log:
+                log = OutreachLog(
+                    donor_id="emergency-public-request",
+                    message=msg,
+                    response_status="Sent"
+                )
+                db.add(log)
+                db.commit()
+                
+            timeline_exists = any(item.get("step") == "Outreach Sent" for item in state["timeline"])
+            if not timeline_exists:
+                state["timeline"].append({
+                    "step": "Outreach Sent",
+                    "status": "In Progress",
+                    "message": f"Alert sent to admin/coordinator ({admin_phone}) to initiate emergency public donor search.",
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                })
+        finally:
+            db.close()
+        return state
+
     # Get all untried donors from the ranked list
     available_donors = [d for d in state["ranked_donors"] if d["donor_id"] not in state["tried_donor_ids"]]
     if not available_donors:
@@ -221,6 +277,32 @@ def process_response_node(state: TransfusionState) -> TransfusionState:
     
     db = SessionLocal()
     try:
+        if donor_id == "emergency-public-request":
+            # Placeholder for public donors
+            log = db.query(OutreachLog).filter(OutreachLog.donor_id == "emergency-public-request").order_by(OutreachLog.created_at.desc()).first()
+            if log:
+                log.response = resp
+                log.response_status = resp
+                db.commit()
+                
+            if resp == "Accepted":
+                state["status"] = "Confirmed"
+                state["timeline"].append({
+                    "step": "Process Response",
+                    "status": "Success",
+                    "message": "A public donor accepted the emergency request! Proceeding to scheduling.",
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                })
+            else:
+                state["status"] = "Failed"
+                state["timeline"].append({
+                    "step": "Process Response",
+                    "status": "Failed",
+                    "message": "Emergency public donor search was declined or timed out.",
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                })
+            return state
+
         donor = db.query(Donor).filter(Donor.id == donor_id).first()
         donor_name = donor.name if donor else "Donor"
         
@@ -283,7 +365,12 @@ def schedule_donation_node(state: TransfusionState) -> TransfusionState:
     
     db = SessionLocal()
     try:
-        donor = db.query(Donor).filter(Donor.id == state["assigned_donor_id"]).first()
+        donor = None
+        if state["assigned_donor_id"] != "emergency-public-request":
+            donor = db.query(Donor).filter(Donor.id == state["assigned_donor_id"]).first()
+        else:
+            donor = db.query(Donor).filter(Donor.id == "emergency-public-request").first()
+            
         patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
         
         # Add to Donation History
@@ -298,7 +385,7 @@ def schedule_donation_node(state: TransfusionState) -> TransfusionState:
         db.add(donation)
         
         # Update Donor eligibility dates and scores (Success reinforcement!)
-        if donor:
+        if donor and donor.id != "emergency-public-request":
             donor.last_donation_date = donation_date_str
             # Set next eligibility 90 days from now (enforces 3 months periodic rotation)
             next_elig = datetime.datetime.utcnow() + datetime.timedelta(days=90)

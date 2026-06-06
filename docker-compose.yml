@@ -45,12 +45,16 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/blood_warriors
       - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:password@db:5432/blood_warriors
       - REDIS_URL=redis://redis:6379/0
-      - AWS_DEFAULT_REGION=us-east-1
-      - USE_LOCAL_MOCKS=FALSE
-      - NOTIFICATION_CHANNEL=WHATSAPP
-      - TWILIO_ACCOUNT_SID=your_twilio_sid
-      - TWILIO_AUTH_TOKEN=your_twilio_token
-      - TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - USE_LOCAL_MOCKS=${USE_LOCAL_MOCKS:-FALSE}
+      - NOTIFICATION_CHANNEL=${NOTIFICATION_CHANNEL:-BOTH}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-your_twilio_sid}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-your_twilio_token}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+      - TWILIO_WHATSAPP_NUMBER=${TWILIO_WHATSAPP_NUMBER:-whatsapp:+14155238886}
+      - ADMIN_PHONE_NUMBER=${ADMIN_PHONE_NUMBER:-+91 99999 99999}
 
     depends_on:
       db:
