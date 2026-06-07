@@ -291,7 +291,9 @@ def get_matches(patient_id: str, db: AsyncSession = Depends(get_db)):
     from app.core.database import SessionLocal
     sync_db = SessionLocal()
     try:
-        matches = MatchingService.get_top_matches(sync_db, patient_id)
+        patient = sync_db.query(Patient).filter(Patient.id == patient_id).first()
+        transfusion_date = patient.expected_next_transfusion_date if patient else None
+        matches = MatchingService.get_top_matches(sync_db, patient_id, transfusion_date=transfusion_date)
         details = []
         for m in matches:
             details.append(schemas.DonorMatchDetail(

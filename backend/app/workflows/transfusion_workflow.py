@@ -117,8 +117,9 @@ def rank_donors_node(state: TransfusionState) -> TransfusionState:
     state["current_step"] = "Rank Donors"
     db = SessionLocal()
     try:
-        # Get matching candidates from matching service
-        matches = MatchingService.get_top_matches(db, state["patient_id"], limit=30)
+        # Get matching candidates from matching service using expected transfusion date
+        transfusion_date = state.get("required_by_date")
+        matches = MatchingService.get_top_matches(db, state["patient_id"], limit=30, transfusion_date=transfusion_date)
         
         # Prioritize Care Bridge pool donors over global Emergency/Backup donors
         bridge_donors = [m for m in matches if m.get("relationship_type") == "Bridge"]
@@ -127,17 +128,19 @@ def rank_donors_node(state: TransfusionState) -> TransfusionState:
         
         state["ranked_donors"] = combined_matches[:10]
         
+        patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
+        blood_group = patient.blood_group if patient else "O Positive"
+        
         if not combined_matches:
             # First, check if the placeholder donor exists in the database. If not, create it to avoid FK errors.
             placeholder = db.query(Donor).filter(Donor.id == "emergency-public-request").first()
             if not placeholder:
-                patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
                 placeholder = Donor(
                     id="emergency-public-request",
                     name="Emergency Public Donor",
                     phone="+91 99999 99999",
                     email="public_donor@example.com",
-                    blood_group=patient.blood_group if patient else "O Positive",
+                    blood_group=blood_group,
                     active_status="Active"
                 )
                 db.add(placeholder)
@@ -148,7 +151,7 @@ def rank_donors_node(state: TransfusionState) -> TransfusionState:
             state["timeline"].append({
                 "step": "Rank Donors",
                 "status": "Success",
-                "message": "Smart Matching Engine yielded 0 pool/emergency donors. Automatically dispatched emergency public request for donor search.",
+                "message": f"Smart Matching Engine yielded 0 eligible bridge or emergency donors for blood group {blood_group}. Automatically raised emergency blood requirement request.",
                 "timestamp": datetime.datetime.utcnow().isoformat()
             })
         else:
@@ -374,7 +377,9 @@ def schedule_donation_node(state: TransfusionState) -> TransfusionState:
         patient = db.query(Patient).filter(Patient.id == state["patient_id"]).first()
         
         # Add to Donation History
-        donation_date_str = datetime.datetime.utcnow().strftime("%d-%m-%Y")
+        donation_date_str = state.get("required_by_date")
+        if not donation_date_str:
+            donation_date_str = datetime.datetime.utcnow().strftime("%d-%m-%Y")
         donation = DonationHistory(
             donor_id=state["assigned_donor_id"],
             patient_id=state["patient_id"],

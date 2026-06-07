@@ -64,6 +64,33 @@ def startup_event():
     except Exception as e:
         logger.error(f"Error training predictive models on startup: {e}")
 
+    # 3. Dynamic alignment of ADMIN_PHONE_NUMBER to the top compatible donor for demo purposes
+    db = SessionLocal()
+    try:
+        from app.models.models import Donor, Patient
+        from app.services.matching_service import MatchingService
+        from app.services.notification_service import NotificationService
+        
+        admin_phone = os.getenv("ADMIN_PHONE_NUMBER")
+        if admin_phone and "99999" not in admin_phone:
+            cleaned_phone = NotificationService._clean_phone(admin_phone)
+            
+            # Find a patient first to run matching
+            patient = db.query(Patient).first()
+            if patient:
+                matches = MatchingService.get_top_matches(db, patient.id, limit=3)
+                if matches:
+                    top_donor_id = matches[0]["donor_id"]
+                    top_donor = db.query(Donor).filter(Donor.id == top_donor_id).first()
+                    if top_donor:
+                        top_donor.phone = cleaned_phone
+                        db.commit()
+                        logger.info(f"DEMO ALIGNMENT: Mapped ADMIN_PHONE_NUMBER '{cleaned_phone}' to top donor '{top_donor.name}' (ID: {top_donor.id}) to show in demo.")
+    except Exception as de:
+        logger.error(f"Failed to align demo phone number on startup: {de}")
+    finally:
+        db.close()
+
 # Register API routes
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

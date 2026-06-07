@@ -1,6 +1,7 @@
 import math
 import datetime
 import logging
+from typing import Optional
 from sqlalchemy.orm import Session
 from app.models.models import Donor, Patient
 from app.ai.availability_model import availability_engine
@@ -41,7 +42,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 class MatchingService:
     @staticmethod
-    def get_top_matches(db: Session, patient_id: str, limit: int = 10):
+    def get_top_matches(db: Session, patient_id: str, limit: int = 10, transfusion_date: Optional[str] = None):
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
         if not patient:
             logger.warning(f"Patient {patient_id} not found in database for matching.")
@@ -56,6 +57,14 @@ class MatchingService:
         matched_profiles = []
 
         baseline = datetime.datetime(2026, 6, 6)
+        comparison_date = baseline
+        
+        target_date = transfusion_date or patient.expected_next_transfusion_date
+        if target_date:
+            try:
+                comparison_date = datetime.datetime.strptime(target_date.strip(), "%d-%m-%Y")
+            except Exception:
+                pass
 
         for d in all_donors:
             # Step 0: Check consent
@@ -67,13 +76,13 @@ class MatchingService:
                 continue
 
             # Step 2: Remove ineligible donors
-            # If next_eligible_date is in the future, they are ineligible.
+            # If next_eligible_date is in the future relative to the comparison date, they are ineligible.
             is_eligible = True
             days_since_last_donation = 180.0
             if d.next_eligible_date:
                 try:
                     next_elig = datetime.datetime.strptime(d.next_eligible_date.strip(), "%d-%m-%Y")
-                    if next_elig > baseline:
+                    if next_elig > comparison_date:
                         is_eligible = False
                 except Exception:
                     pass
@@ -81,7 +90,7 @@ class MatchingService:
             if d.last_donation_date:
                 try:
                     last_don = datetime.datetime.strptime(d.last_donation_date.strip(), "%d-%m-%Y")
-                    days_since_last_donation = float(max(0, (baseline - last_don).days))
+                    days_since_last_donation = float(max(0, (comparison_date - last_don).days))
                 except Exception:
                     pass
 
